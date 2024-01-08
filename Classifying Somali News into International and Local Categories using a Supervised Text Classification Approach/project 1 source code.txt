@@ -1,0 +1,59 @@
+# 1. Import Necessary Libraries
+from sklearn.datasets import fetch_20newsgroups
+from sklearn.model_selection import train_test_split, cross_val_score
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.svm import SVC
+from sklearn.neural_network import MLPClassifier
+from nltk.stem import PorterStemmer
+from nltk.corpus import stopwords
+import nltk
+import re
+from sklearn.metrics import accuracy_score
+
+nltk.download('stopwords')
+
+# 2. Load the Corpus
+newsgroups = fetch_20newsgroups(subset='all')
+data, target = newsgroups.data, newsgroups.target
+
+# 3. Pre-Processing Function
+def preprocess(text):
+    stemmer = PorterStemmer()
+    stop_words = set(stopwords.words('english'))
+    # Lowercasing
+    text = text.lower()
+    # Removing special characters and digits
+    text = re.sub(r'\W+|\d+', ' ', text)
+    # Tokenization and cleaning
+    tokens = nltk.word_tokenize(text)
+    return ' '.join([stemmer.stem(word) for word in tokens if word not in stop_words])
+
+# Preprocess the dataset
+data_preprocessed = [preprocess(text) for text in data]
+
+# 4. Train/Test Split
+X_train, X_test, y_train, y_test = train_test_split(data_preprocessed, target, test_size=0.2, random_state=42)
+
+# 5. Create Unigram & Bigram TFIDF Vectors
+vectorizer_unigram = TfidfVectorizer(ngram_range=(1,1))
+X_train_unigram = vectorizer_unigram.fit_transform(X_train)
+X_test_unigram = vectorizer_unigram.transform(X_test)
+
+vectorizer_bigram = TfidfVectorizer(ngram_range=(1,2))
+X_train_bigram = vectorizer_bigram.fit_transform(X_train)
+X_test_bigram = vectorizer_bigram.transform(X_test)
+
+# 6. Classifiers Initialization
+rf_classifier = RandomForestClassifier()
+svc_classifier = SVC()
+mlp_classifier = MLPClassifier()
+
+# 7. Evaluate Classifiers with 5-Fold Cross-Validation and Accuracy
+for classifier in [rf_classifier, svc_classifier, mlp_classifier]:
+    for feature_set in [(X_train_unigram, X_test_unigram), (X_train_bigram, X_test_bigram)]:
+        scores = cross_val_score(classifier, feature_set[0], y_train, cv=5)
+        classifier.fit(feature_set[0], y_train)
+        y_pred = classifier.predict(feature_set[1])
+        accuracy = accuracy_score(y_test, y_pred)
+        print(f"Classifier: {classifier.__class__.__name__}, Feature Set: {'Unigram' if feature_set[0] is X_train_unigram else 'Bigram'}, Cross-Val Score: {scores.mean()}, Accuracy: {accuracy}")

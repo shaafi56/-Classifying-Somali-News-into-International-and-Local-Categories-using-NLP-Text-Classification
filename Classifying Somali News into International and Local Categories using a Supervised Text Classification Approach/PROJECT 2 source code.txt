@@ -1,0 +1,133 @@
+import pandas as pd
+
+import matplotlib.pyplot as plt
+!pip install WordCloud
+from wordcloud import WordCloud
+import nltk
+from nltk.corpus import stopwords
+from nltk.tokenize import word_tokenize
+from nltk.stem import WordNetLemmatizer
+from sklearn.feature_extraction.text import CountVectorizer, TfidfVectorizer
+from sklearn.model_selection import train_test_split, cross_val_score
+from sklearn.linear_model import LogisticRegression
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.neural_network import MLPClassifier
+from sklearn.metrics import accuracy_score
+
+# Download NLTK resources if not already downloaded
+nltk.download('punkt')
+nltk.download('stopwords')
+nltk.download('wordnet')
+
+df = pd.read_excel("Desktop/news excel.xlsx")
+df.dropna(how="any", inplace=True, axis=1)
+df.columns = ['NOOCA', 'WARBIXINTA']
+print(df.head())
+print(df['NOOCA'].value_counts())
+
+# Word Cloud
+wordcloud = WordCloud(width=800, height=400, background_color='white').generate(' '.join(df['WARBIXINTA']))
+plt.figure(figsize=(10, 5))
+plt.imshow(wordcloud, interpolation='bilinear')
+plt.title('Word Cloud for News Text')
+plt.axis('off')
+
+# Bar Chart
+plt.figure(figsize=(8, 4))
+df['NOOCA'].value_counts().plot(kind='bar')
+plt.title('Distribution of News Categories')
+plt.xlabel('NOOCA')
+plt.ylabel('CADADKA')
+
+# Show plots
+plt.show()
+
+
+# Tokenization
+df['Tokenized_Text'] = df['WARBIXINTA'].apply(lambda x: word_tokenize(x))
+
+# Stopword Removal
+#stop_words = ['waa', 'waana', 'waan', 'ah', 'oo', 'ee', 'waxey', 'ugu', 'waxa','eey', 'iyo', 'aad', 'baan', 'u', 'leh', 'beey', 'ahna', 'tiq', 'sidoo', 'kalena', 'laakiin','ay','is','ayaa', 'isku', 'ka',  'ku', 'lagu', 'ayay',  'ayuu', 'inuu', 'inaa', 'si', 'laga', 'in', 'haya', 'haaya', 'intii', 'uu', 'ii', 'la', 'looga', 'Mar', 'kaliya', 'waxaa', 'loo']
+stop_words = ['waa', 'waana', 'waan', 'ah', 'oo', 'ee', 'waxey', 'ugu', 'waxa',
+             'eey', 'iyo', 'aad', 'baan', 'u', 'leh', 'yar', 'yaraaday', 'yarayd', 'yeesheen', 'yeeshee', 'beey', 'ahna', 'tiq', 'oo', 'yimid', 'yiri' 'Ku','ee' 'sidoo', 'kalena', 'laakiin',
+             'yeeshay','yesheen', 'yaala', 'ay', 'yaabaa', 'yaabo', 'is', 'yare', 'yaab', 'yeesho', 'yareeyo','yeelatay','ayaa','isku', 'ka', 'ku', 'yiri','yimaadaan','yimaaday','yimaaday','yihiin', 'lagu', 'ayay',  'ayuu', 
+              'inuu', 'inaa', 'si', 'laga', 'in', 'yaryar','yaalla', 'yaal','yaalay', 'haya', 'haaya', 'intii', 'uu', 'ii', 'la', 'looga','mar','kaliya','loo','yahay']
+df['Filtered_Text'] = df['Tokenized_Text'].apply(lambda x: [word for word in x if word.lower() not in stop_words])
+
+# Lemmatization
+lemmatizer = WordNetLemmatizer()
+df['Lemmatized_Text'] = df['Filtered_Text'].apply(lambda x: [lemmatizer.lemmatize(word) for word in x])
+
+# Create Bag of Words (BoW) vector
+#unigram
+vectorizer_bow_Unigram = CountVectorizer()
+X_bow_Unigram = vectorizer_bow_Unigram.fit_transform([' '.join(tokens) for tokens in df['Lemmatized_Text']])
+# bigram 
+vectorizer_bow_Bigram = CountVectorizer(ngram_range=(2,2))
+X_bow_Bigram = vectorizer_bow_Bigram.fit_transform([' '.join(tokens) for tokens in df['Lemmatized_Text']])
+
+vectorizer_tfidf = TfidfVectorizer()
+X_tfidf = vectorizer_tfidf.fit_transform([' '.join(tokens) for tokens in df['Lemmatized_Text']])
+
+# Show BoW and TF-IDF matrices
+bow_df = pd.DataFrame(X_bow_Unigram.toarray(), columns=vectorizer_bow_Unigram.get_feature_names_out())
+tfidf_df = pd.DataFrame(X_tfidf.toarray(), columns=vectorizer_tfidf.get_feature_names_out())
+
+# Display the difference between unigrams and bigrams
+unigrams = vectorizer_bow_Unigram.get_feature_names_out()
+bigrams = vectorizer_bow_Bigram.get_feature_names_out()
+
+print(unigrams)
+print(bigrams)
+
+print("Difference between Unigrams and Bigrams:")
+print("Number of Unigrams:", len(unigrams))
+print("Number of Bigrams:", len(bigrams))
+print("Common words between Unigrams and Bigrams:", len(set(unigrams) & set(bigrams)))
+
+# Print the preprocessed data
+print(df[['NOOCA', 'Lemmatized_Text']])
+print("\nBag of Words (BoW) Matrix:")
+print(bow_df)
+print("\nTF-IDF Matrix:")
+print(tfidf_df)
+
+
+
+# Split the dataset into training and test sets (90/10 ratio)
+X = X_bow_Unigram  # Use BoW data for training
+y = df['NOOCA']
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.1, random_state=42)
+
+# Initialize the classifiers
+logistic_regression = LogisticRegression(max_iter=1000, random_state=42)
+random_forest = RandomForestClassifier(random_state=42)
+mlp_classifier = MLPClassifier(max_iter=1000, random_state=42)
+
+# Train the classifiers
+logistic_regression.fit(X_train, y_train)
+random_forest.fit(X_train, y_train)
+mlp_classifier.fit(X_train, y_train)
+
+# Evaluate each model and compare results using accuracy
+lr_pred = logistic_regression.predict(X_test)
+rf_pred = random_forest.predict(X_test)
+mlp_pred = mlp_classifier.predict(X_test)
+
+lr_accuracy = accuracy_score(y_test, lr_pred)
+rf_accuracy = accuracy_score(y_test, rf_pred)
+mlp_accuracy = accuracy_score(y_test, mlp_pred)
+
+# Perform 5-fold cross-validation for each classifier
+lr_cv_accuracy = cross_val_score(logistic_regression, X, y, cv=5, scoring='accuracy').mean()
+rf_cv_accuracy = cross_val_score(random_forest, X, y, cv=5, scoring='accuracy').mean()
+mlp_cv_accuracy = cross_val_score(mlp_classifier, X, y, cv=5, scoring='accuracy').mean()
+
+# Print the accuracy scores
+print("Accuracy for Logistic Regression:", lr_accuracy)
+print("Accuracy for Random Forest:", rf_accuracy)
+print("Accuracy for MLP Classifier:", mlp_accuracy)
+
+print("\nCross-Validation Accuracy for Logistic Regression:", lr_cv_accuracy)
+print("Cross-Validation Accuracy for Random Forest:", rf_cv_accuracy)
+print("Cross-Validation Accuracy for MLP Classifier:", mlp_cv_accuracy)
